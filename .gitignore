@@ -1,0 +1,16 @@
+# Ignore the target directory (build output)
+target/
+
+# Ignore Rust library files
+*.rlib
+
+# Ignore backup and temporary files
+**/*.rs.bk
+*.swp
+*.swo
+
+# Ignore IDE/editor files
+.idea/
+.vscode/
+*.iml
+

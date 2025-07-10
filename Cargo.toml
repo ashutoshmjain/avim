@@ -1,0 +1,21 @@
+[package]
+name = "avim"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+crossterm = "0.27.0"
+ratatui = { version = "0.26.1", features = ["crossterm"] }
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.11", features = ["json"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+base64 = "0.21"
+textwrap = "0.16.0"
+dirs = "5.0"
+sha2 = "0.10.8"
+hex = "0.4.3"
+arboard = "3.4.0"
+
