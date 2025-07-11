@@ -20,7 +20,7 @@ Instead of clicking and dragging on a timeline, you edit audio by manipulating t
 1.  **Install Dependencies:** Follow the instructions in the [Technical Specs](immersive://avim_tech_specs) document to install Rust, SoX, and other required libraries.
 2.  **Set API Key:** Set your `GEMINI_API_KEY` environment variable.
 3.  **Run the application:**
-    * To start a new project: `avim your_audio_file.wav`
+    * To start a new project: `avim your_audio_file.mp3` - It is recommended to use mp3 format for transcription because wav files take longer time to transcript through Gemini. Once transcribed, the file is saved in cache. Should you want to re-transcribe your audio, use --no-cache flag.
     * To resume an existing project: `avim your_project_file.avim`
 
 ### Startup Flags
