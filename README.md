@@ -1,139 +1,205 @@
-use crate::app::App;
+avim - A Vim-Inspired Audio Editor
+avim is a terminal-based audio editor designed for speed and efficiency, especially for spoken-word content like podcasts, interviews, and audiobooks. It transcribes your audio into intelligently segmented clips and provides a modal, keyboard-centric interface inspired by the Vim text editor.
 
-const ADJUSTMENT_AMOUNT: f64 = 0.05; // 50ms
+Instead of clicking and dragging on a timeline, you edit audio by manipulating the text of its transcript.
 
-pub fn delete_clip(app: &mut App) {
-    if !app.clips.is_empty() {
-        app.save_undo_state();
-        let deleted_clip = app.clips.remove(app.current_clip_index);
-        app.register = Some(deleted_clip);
-        if app.current_clip_index >= app.clips.len() && !app.clips.is_empty() {
-            app.current_clip_index = app.clips.len() - 1;
-        }
-        app.status_message = "1 clip deleted.".to_string();
-    }
-}
+Features
+Intelligent Transcription: Uses the Gemini API to transcribe audio and segment it into logical clips based on speaker changes and pauses.
 
-pub fn yank_clip(app: &mut App) {
-    if let Some(clip) = app.clips.get(app.current_clip_index) {
-        app.register = Some(clip.clone());
-        app.status_message = "1 clip yanked.".to_string();
-    }
-}
+Vim-like Modal Editing: Navigate and edit audio clips using familiar Vim keybindings (j, k, dd, yy, p).
 
-pub fn paste_clip(app: &mut App) {
-    if let Some(clip_to_paste) = app.register.clone() {
-        app.save_undo_state();
-        let paste_index = if app.clips.is_empty() { 0 } else { app.current_clip_index + 1 };
-        app.clips.insert(paste_index, clip_to_paste);
-        app.clips[paste_index].is_manually_adjusted = true; // Pasted clips are considered manual
-        app.current_clip_index = paste_index;
-        app.status_message = "1 clip pasted.".to_string();
-    }
-}
+Transcript Adjustment: Powerful modes to correct transcription errors by moving text between clips or adjusting timestamps.
 
-pub fn next_clip(app: &mut App) {
-    if !app.clips.is_empty() && app.current_clip_index < app.clips.len() - 1 {
-        app.current_clip_index += 1;
-    }
-}
+Intelligent Autofix: Learns from your manual corrections to suggest and apply fixes to the rest of the file.
 
-pub fn previous_clip(app: &mut App) {
-    if app.current_clip_index > 0 {
-        app.current_clip_index -= 1;
-    }
-}
+Project Files: Save your editing session, including all clips and comments, to a .avim file to resume work later.
 
-pub fn undo(app: &mut App) {
-    if let Some(previous_state) = app.undo_stack.pop() {
-        let current_state = app.clips.clone();
-        app.redo_stack.push(current_state);
-        app.clips = previous_state;
-        app.status_message = "Undo.".to_string();
-        if app.current_clip_index >= app.clips.len() {
-            app.current_clip_index = app.clips.len().saturating_sub(1);
-        }
-    } else {
-        app.status_message = "Already at oldest change.".to_string();
-    }
-}
+Terminal-Based: Runs entirely in your terminal, making it lightweight and accessible via SSH.
 
-pub fn redo(app: &mut App) {
-    if let Some(next_state) = app.redo_stack.pop() {
-        let current_state = app.clips.clone();
-        app.undo_stack.push(current_state);
-        app.clips = next_state;
-        app.status_message = "Redo.".to_string();
-        if app.current_clip_index >= app.clips.len() {
-            app.current_clip_index = app.clips.len().saturating_sub(1);
-        }
-    } else {
-        app.status_message = "Already at newest change.".to_string();
-    }
-}
+Getting Started
+Installation & Running
+Install Dependencies: Follow the instructions in the Technical Specs document to install Rust, SoX, and other required libraries.
 
+Set API Key: Set your GEMINI_API_KEY environment variable.
 
-pub fn adjust_start_time(app: &mut App, increase: bool) {
-    app.save_undo_state();
-    let adjustment = if increase { ADJUSTMENT_AMOUNT } else { -ADJUSTMENT_AMOUNT };
-    
-    let prev_clip_end_time = if app.current_clip_index > 0 {
-        app.clips.get(app.current_clip_index - 1).map(|c| c.end_time)
-    } else { None };
+Run the application:
 
-    if let Some(clip) = app.clips.get_mut(app.current_clip_index) {
-        let new_start_time = clip.start_time + adjustment;
-        if new_start_time >= 0.0 && new_start_time < clip.end_time {
-            if let Some(prev_end) = prev_clip_end_time {
-                if new_start_time > prev_end { 
-                    clip.start_time = new_start_time;
-                    clip.is_manually_adjusted = true;
-                }
-            } else { 
-                clip.start_time = new_start_time;
-                clip.is_manually_adjusted = true;
-            }
-        }
-    }
-}
+To start a new project: avim your_audio_file.wav
 
-pub fn adjust_end_time(app: &mut App, increase: bool) {
-    app.save_undo_state();
-    let adjustment = if increase { ADJUSTMENT_AMOUNT } else { -ADJUSTMENT_AMOUNT };
+To resume an existing project: avim your_project_file.avim
 
-    let next_clip_start_time = if app.current_clip_index < app.clips.len() - 1 {
-        app.clips.get(app.current_clip_index + 1).map(|c| c.start_time)
-    } else { None };
+Startup Flags
+You can modify the application's behavior at launch with the following flags:
 
-    if let Some(clip) = app.clips.get_mut(app.current_clip_index) {
-        let new_end_time = clip.end_time + adjustment;
-        if new_end_time > clip.start_time {
-            if let Some(next_start) = next_clip_start_time {
-                if new_end_time < next_start { 
-                    clip.end_time = new_end_time; 
-                    clip.is_manually_adjusted = true;
-                }
-            } else { 
-                clip.end_time = new_end_time;
-                clip.is_manually_adjusted = true;
-            }
-        }
-    }
-}
+Flag
 
-pub fn append_to_comment(app: &mut App, c: char) {
-    app.save_undo_state();
-    if let Some(clip) = app.clips.get_mut(app.current_clip_index) {
-        clip.comment.push(c);
-        clip.is_manually_adjusted = true;
-    }
-}
+Description
 
-pub fn pop_from_comment(app: &mut App) {
-    app.save_undo_state();
-    if let Some(clip) = app.clips.get_mut(app.current_clip_index) {
-        clip.comment.pop();
-        clip.is_manually_adjusted = true;
-    }
-}
+Example
+
+--no-cache
+
+Ignores any existing cache file and forces a new transcription from the Gemini API.
+
+avim --no-cache my_audio.wav
+
+--debug
+
+Displays an interactive debug panel showing internal state and logs for testing.
+
+avim --debug my_audio.wav
+
+The avim Workflow
+The recommended workflow is designed to be fast and efficient:
+
+Initial Transcription: avim creates an initial transcript. It automatically validates this against the true audio length and sanitizes it to remove "phantom" clips.
+
+Manual Correction (The "Learning" Phase): Use the m (adjust) command to fix the first few clips where the text doesn't perfectly match the audio segment. After 2-3 consistent adjustments, avim will learn your correction pattern.
+
+Intelligent Autofix: Run the :autofix command. avim will use the pattern it learned to automatically correct the rest of the file. You can repeat steps 2 and 3 as needed to further refine the transcript.
+
+Final Edits: Use the standard Vim motions (dd, p, etc.) and timestamp nudging ([, ], {, }) to make your final creative edits.
+
+Save and Export: Save your work to a .avim project file with :w and export the final audio with :export.
+
+Command Reference
+Normal Mode
+Key(s)
+
+Action
+
+Description
+
+j / k
+
+Navigate Clips
+
+Move the selection down or up.
+
+dd
+
+Delete Clip
+
+Deletes the currently selected clip.
+
+yy
+
+Yank Clip
+
+Copies (yanks) the current clip to the register.
+
+p
+
+Paste Clip
+
+Pastes the yanked clip after the current selection.
+
+u
+
+Undo
+
+Reverts the last action.
+
+Ctrl+r
+
+Redo
+
+Re-applies the last undone action.
+
+spacebar
+
+Play/Stop Clip
+
+Toggles playback for the currently selected clip.
+
+Shift+P
+
+Play/Stop All
+
+Toggles playback for all clips from the current one to the end.
+
+[ / ]
+
+Adjust Start Time
+
+Nudges the start time of the clip backward/forward by 50ms.
+
+{ / }
+
+Adjust End Time
+
+Nudges the end time of the clip backward/forward by 50ms.
+
+m
+
+Enter Adjust Mode
+
+Enters transcript adjustment mode.
+
+i
+
+Enter Insert Mode
+
+Enters Insert Mode to add a comment.
+
+:
+
+Enter Command Mode
+
+Switches to Command Mode.
+
+Adjust Mode (m)
+Key(s)
+
+Action
+
+Description
+
+w / b
+
+Select Word
+
+Moves the split point forward/backward one word in the next clip.
+
+Enter
+
+Confirm Adjustment
+
+Moves the selected words to the current clip's transcript.
+
+Esc
+
+Cancel
+
+Exits Adjust Mode without making changes.
+
+Command Mode (:)
+Command
+
+Description
+
+:w [filename.avim]
+
+Saves the current state to an .avim project file.
+
+:export {format} {filename}
+
+Exports the final edited audio.
+
+:q / :q!
+
+Quits the application.
+
+:help
+
+Displays a summary of all available commands.
+
+:lasterror
+
+Copies the last recorded error message to the system clipboard.
+
+:autofix
+
+Applies the learned text adjustments to the rest of the file.
+
 
